@@ -1,0 +1,35 @@
+import laspy 
+import numpy as np 
+import matplotlib.pyplot as plt 
+from scipy.spatial import cKDTree 
+
+#Load LiDAR Data (LAS) 
+las_file = r"E:\MS GIS IST\Semester 3\Photogram\LiDAR data\points.las" #this code has my file path 
+las = laspy.read(las_file) 
+
+#Extract coordinates & attributes 
+x, y, z = las.x, las.y, las.z 
+intensity = las.intensity 
+returns = las.return_number 
+classification = las.classification 
+
+#Compute Statistics 
+print("\n--- LiDAR Data Statistics ---") 
+print(f"Total points: {len(x)}") 
+print(f"Elevation: Min={np.min(z):.2f}, Max={np.max(z):.2f}, Mean={np.mean(z):.2f}") 
+print(f"Intensity: Min={np.min(intensity)}, Max={np.max(intensity)}, Mean={np.mean(intensity):.2f}") 
+print(f"Return numbers: {np.unique(returns, return_counts=True)}") 
+print(f"Point classifications: {np.unique(classification, return_counts=True)}") 
+
+#Compute Point Density 
+grid_size = 10  # Grid resolution (meters) 
+tree = cKDTree(np.vstack((x, y)).T)  # k-d tree for fast searching 
+grid_x = np.arange(min(x), max(x), grid_size) 
+grid_y = np.arange(min(y), max(y), grid_size) 
+density_map = np.zeros((len(grid_x), len(grid_y))) 
+for i, gx in enumerate(grid_x): 
+    for j, gy in enumerate(grid_y): 
+        count = len(tree.query_ball_point([gx, gy], grid_size / 2)) 
+        density_map[i, j] = count 
+ 
+print("\nPoint density computation completed!") 
