@@ -1,0 +1,106 @@
+import tarfile
+from osgeo import gdal
+import requests
+from pathlib import Path
+
+
+# Specify the range of latitudes and longitudes
+lat_start, lat_end = 34, 37
+lon_start, lon_end = 72, 77
+
+# Specify the folder where you want to save the downloaded tiles
+target_folder =r"E:\MS_GIS\Courses\GIS_Customization_Programming_Python\codes\Download_Copernicus\DEM_DATA"   
+shapefile_path = r'E:\MS_GIS\Courses\GIS_Customization_Programming_Python\codes\Download_Copernicus\GB_shp\GB.shp' # Path to the shapefile
+
+## unzipped DEM files will be  
+vrt_file=target_folder + r'\vrt_file.vrt'
+output_path = target_folder+ r'/output_clipped.tif'  # Path to clipped mosaiced geotiff raster
+
+# Specify the directory path
+unzip_path = Path(target_folder+ r'\temp')
+if not unzip_path.exists():
+    # Create the directory
+    unzip_path.mkdir(parents=True, exist_ok=True)
+    print(f"Directory created: {unzip_path}")
+else:
+    print(f"Directory already exists: {unzip_path}")
+
+
+
+# Function to download a single tile
+def download_tile(latitude, longitude, target_folder):
+    #url = f"https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/COP-DEM_GLO-30-DGED__2022_1/Copernicus_DSM_10_N{latitude:02d}_00_E{longitude:03d}_00.tar"  # 30m DEM
+    url = f"https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/COP-DEM_GLO-90-DGED__2022_1/Copernicus_DSM_30_N{latitude:02d}_00_E{longitude:03d}_00.tar"   # 90m DEM
+    filename = url.split('/')[-1]
+    filepath = target_folder / filename
+    
+    # Check if file already exists to avoid re-downloading
+    if not filepath.exists():
+        print(f"Downloading: {url}")
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(filepath, 'wb') as file:
+                file.write(response.content)
+            print(f"Downloaded: {filename}")
+        else:
+            print(f"Failed to download {filename}. Status code: {response.status_code}")
+    else:
+        print(f"{filename} already exists.")
+
+# Main script to download tiles within a latitude and longitude range
+def download_tiles(lat_start, lat_end, lon_start, lon_end, target_folder):
+    target_folder = Path(target_folder)
+    target_folder.mkdir(parents=True, exist_ok=True)
+    
+    for lat in range(lat_start, lat_end + 1):
+        for lon in range(lon_start, lon_end + 1):
+            download_tile(lat, lon, target_folder)
+
+def extract_tar_files(source_folder, target_folder):
+    source_folder = Path(source_folder)
+    target_folder = Path(target_folder)
+    target_folder.mkdir(parents=True, exist_ok=True)
+
+    for tar_file in source_folder.glob('*.tar'):
+        print(f"Extracting {tar_file}...")
+        with tarfile.open(tar_file, 'r') as tar:
+            tar.extractall(path=target_folder)
+        print(f"Extracted to {target_folder}")
+
+def create_vrt_from_dem_tifs(base_folder, output_vrt_path):
+    base_folder = Path(base_folder)
+    tif_files = list(base_folder.rglob('*DEM.tif'))  # Use rglob to find all DEM.tif files
+
+    # Print the paths of found TIF files
+    for tif in tif_files:
+        print(tif)
+
+    # Use GDAL to create a VRT from the list of TIF files
+    vrt_options = gdal.BuildVRTOptions(resampleAlg='nearest', addAlpha=True)
+    vrt = gdal.BuildVRT(str(output_vrt_path), [str(tif) for tif in tif_files], options=vrt_options)
+    vrt.FlushCache()  # Ensure data is written to disk
+
+    print(f"VRT created at {output_vrt_path}")
+
+                        
+def clip_raster_with_shapefile(vrt_path, shapefile_path, output_path):
+    # Use gdal.Warp to clip the raster with the shapefile
+    ds = gdal.Warp(output_path, vrt_path,
+                   format='GTiff',  # Specify the output format as GeoTIFF
+                   cutlineDSName=shapefile_path,  # Define the shapefile for the cutline
+                   cropToCutline=True,  # Crop to the boundaries of the shapefile
+                   dstNodata=None)  # Specify a no data value if needed (e.g., 0)
+    if ds:
+        ds = None  # Close the dataset
+        print(f"Raster clipped successfully. Output saved at {output_path}")
+    else:
+        print("Failed to clip the raster.")
+
+
+# Call the function to start downloading DEM tiles
+download_tiles(lat_start, lat_end, lon_start, lon_end, target_folder)
+# Extract TAR files 
+extract_tar_files(target_folder, unzip_path)
+# Create VRT from extracted TIFFs
+create_vrt_from_dem_tifs(unzip_path,vrt_file)
+clip_raster_with_shapefile(vrt_file, shapefile_path, output_path)
