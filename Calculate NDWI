@@ -1,0 +1,28 @@
+#Calculate NDWI of given sentinel image with this code. Set the thresholds according to your criteria.
+
+import numpy as np
+import skimage.io as io
+import matplotlib.pyplot as plt
+
+Image=io.imread(r'E:\MS GIS IST\Semester 2\Advanced Programming\Sentinel_Im.tif') 
+
+Image=np.array(Image, dtype = np.float64)
+Green_band=Image[:,:,2]  
+NIR_band=Image[:,:,7]
+NDWI = (Green_band-NIR_band)/(Green_band+NIR_band)
+
+plt.imshow(NDWI)
+plt.imshow(NDWI, cmap='grey', vmin=-1, vmax=1)
+
+print('The maximum NDWI in the image is: ', np.max(NDWI)) 
+idx=NDWI>0.2 
+plt.figure()
+
+print('The total number of water pixels is:', np.sum(idx))
+plt.imshow(idx, cmap='grey')
+
+Area = ((np.sum(idx))*100)
+print('The area of NDWI is:' , Area )
+
+Area_in_Km2 = (Area/1000000)
+print('The area in Kilometer squares is:' , Area_in_Km2)
