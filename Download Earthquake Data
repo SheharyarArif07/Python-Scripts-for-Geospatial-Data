@@ -1,0 +1,60 @@
+#Use this code to download earthquake data from USGS
+
+import requests
+import json
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+from datetime import datetime, timedelta
+
+def get_earthquake_data(starttime, endtime, minmagnitude):
+    url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+    params = {
+        'format': 'geojson',
+        'starttime': starttime,
+        'endtime': endtime,
+        'minmagnitude': minmagnitude
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        return data
+    else:
+        print(f"Request failed with status code {response.status_code}")
+        return None
+
+def plot_earthquake_locations(data, region_bounds):
+    if data:
+        # Extract earthquake locations
+        lons = [feature['geometry']['coordinates'][0] for feature in data['features']]
+        lats = [feature['geometry']['coordinates'][1] for feature in data['features']]
+        mags = [feature['properties']['mag'] for feature in data['features']]
+
+        # Plot using cartopy
+        fig = plt.figure(figsize=(10, 5))
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        ax.set_extent(region_bounds, crs=ccrs.PlateCarree())
+        ax.add_feature(cfeature.LAND)
+        ax.add_feature(cfeature.OCEAN)
+        ax.add_feature(cfeature.COASTLINE)
+        ax.add_feature(cfeature.BORDERS, linestyle=':')
+        ax.add_feature(cfeature.LAKES, alpha=0.5)
+        ax.add_feature(cfeature.RIVERS)
+
+        # Plot earthquake locations
+        scatter = plt.scatter(lons, lats, c=mags, cmap='Reds', edgecolor='k', s=10, transform=ccrs.PlateCarree())
+        plt.colorbar(scatter, label='Magnitude')
+        plt.title('Earthquake Locations and Magnitudes in Pakistan (Last 50 Years)')
+        plt.show()
+
+# Example usage
+endtime = datetime.now().strftime('2005-06-14')
+starttime = (datetime.now() - timedelta(days=10*365)).strftime('%Y-%m-%d')
+minmagnitude = 5.0
+
+# Define the geographical bounds for Pakistan
+# [West Longitude, East Longitude, South Latitude, North Latitude]
+region_bounds = [60, 80, 23, 38]
+
+earthquake_data = get_earthquake_data(starttime, endtime, minmagnitude)
+plot_earthquake_locations(earthquake_data, region_bounds)
