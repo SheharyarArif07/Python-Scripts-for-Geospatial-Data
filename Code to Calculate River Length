@@ -1,0 +1,24 @@
+#Code to calculate the length of Indus River in each province of Pakistan. This can be used for anyother study area.
+ 
+import geopandas as gpd
+
+indus_river_path = r'E:\MS GIS IST\Semester 2\Advanced Programming\Final Assignment\question no.2 (Indus river)\Indus River Shapefiles\Indus River.shp'
+indus_river = gpd.read_file(indus_river_path)
+
+provinces_path = r'E:\MS GIS IST\Semester 1\GIS\Pakistan Shapefile\pak_adm_wfp_20220909_shp\pak_admbnda_adm1_wfp_20220909.shp'
+provinces = gpd.read_file(provinces_path)
+
+projected_crs = 'EPSG:32643'
+
+indus_river = indus_river.to_crs(projected_crs)
+provinces = provinces.to_crs(projected_crs)
+
+indus_in_provinces = gpd.overlay(indus_river, provinces, how='intersection')
+
+indus_in_provinces['length_meters'] = indus_in_provinces.geometry.length
+
+indus_in_provinces['length_km'] = indus_in_provinces['length_meters'] / 1000
+
+indus_length_by_province = indus_in_provinces.groupby('ADM1_EN')['length_km'].sum().reset_index()
+
+print(indus_length_by_province)
