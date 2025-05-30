@@ -1,0 +1,75 @@
+#Download, Extract, Process, and Visualize ERA5 2m temperature data
+# Install gdown to download files
+!pip install gdown
+
+#  Download the file from Google Drive
+import gdown
+import zipfile
+import os
+
+# The shared link converted to a downloadable link
+url = 'https://drive.google.com/uc?id=1I07JnatlxdcUn-SrqGCEnye_uJJFvqyM'
+output = '/content/Temp2m_Jan.zip'
+gdown.download(url, output, quiet=False)
+
+# Extract the downloaded zip file
+with zipfile.ZipFile(output, 'r') as zip_ref:
+    zip_ref.extractall('/content/Temp2m_Jan')
+
+#  Import necessary libraries
+import xarray as xr
+import matplotlib.pyplot as plt
+import glob
+import numpy as np
+from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.colors import Normalize
+
+# Define the path pattern to the extracted NetCDF files
+file_pattern = '/content/Temp2m_Jan/Temp2m_Jan/ERA5_2m_temperature_*.nc'
+
+# Use glob to get the list of files
+files = glob.glob(file_pattern)
+
+# Load multiple NetCDF files into an xarray.Dataset
+ds = xr.open_mfdataset(files, combine='by_coords')
+
+
+# Compute the mean 2m temperature for each pixel across all years
+overall_mean = ds['t2m'].mean(dim='time')
+
+# Compute the mean 2m temperature for each pixel for each year
+yearly_mean = ds['t2m'].groupby('time.year').mean(dim='time')
+
+# Compute the deviation of each year's temperature from the overall mean
+deviation = yearly_mean.mean(dim=['latitude', 'longitude']) - overall_mean.mean(dim=['latitude', 'longitude'])
+
+# Prepare data for plotting
+years = deviation.year.values
+deviations = deviation.values
+
+# Normalize deviations for color intensity
+norm = Normalize(vmin=deviations.min(), vmax=deviations.max())
+cmap = plt.cm.coolwarm
+
+# Create figure and axis
+fig, ax = plt.subplots(figsize=(12, 8))
+
+def update(num):
+    ax.clear()
+    # Compute colors based on deviations
+    colors = [cmap(norm(dev)) for dev in deviations[:num+1]]
+    bars = ax.bar(years[:num+1], deviations[:num+1], color=colors)
+    ax.set_xlabel('Year')
+    ax.set_ylabel('Deviation from Mean Temperature (K)')
+    ax.set_title('Deviation from Mean 2m Temperature for Each Year')
+    ax.text(0.5, 1.05, f'Year: {years[num]}', transform=ax.transAxes, ha='center', va='center', fontsize=20, fontweight='bold')
+    ax.set_xlim(1950, 2024)
+    ax.set_ylim(deviations.min() - 1, deviations.max() + 1)
+
+# Create animation
+ani = FuncAnimation(fig, update, frames=len(years), repeat=False)
+
+# Save animation using PillowWriter
+ani.save('temperature_deviation.gif', writer=PillowWriter(fps=4))
+
+plt.show()
