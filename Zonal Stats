@@ -1,0 +1,53 @@
+#Perform zonal statistics on land cover raster in each district of study area and make choropleth map.
+
+import geopandas as gpd
+import rasterio
+from rasterio.mask import mask
+from rasterstats import zonal_stats
+import numpy as np
+import matplotlib.pyplot as plt
+
+landcover_path = r'E:\MS GIS IST\Semester 2\Advanced Programming\Final Assignment\79483\Results\U2018_CLC2018_V2020_20u1\U2018_CLC2018_V2020_20u1\U2018_CLC2018_V2020_20u1.tif'
+districts_shapefile_path = r'E:\MS GIS IST\Semester 2\Advanced Programming\Final Assignment\Germany_shapefile\de_1km.shx'
+
+landcover_raster = rasterio.open(landcover_path)
+lc_raster = landcover_raster.read(1)
+class_labels = np.unique(lc_raster)
+
+districts = gpd.read_file(districts_shapefile_path)
+
+stats = zonal_stats(districts, lc_raster, affine=landcover_raster.transform, stats=["count"], categorical=True)
+
+zonal_stats_df = gpd.GeoDataFrame(districts)
+
+class_names = {
+    10: "Tree cover",
+    20: "Shrubland",
+    30: "Grassland",
+    40: "Cropland",
+    50: "Built-up",
+    60: "Bare / sparse vegetation",
+    70: "Snow and ice",
+    80: "Permanent water bodies",
+    90: "Herbaceous wetland",
+    95: "Mangroves",
+    100: "Moss and lichen"
+}
+
+for idx, stat in enumerate(stats):
+    for landcover_type, count in stat.items():
+        class_name = class_names.get(landcover_type, f'Unknown_{landcover_type}')
+        zonal_stats_df.loc[idx, f'landcover_{class_name}'] = count
+
+print(zonal_stats_df.head())
+
+for landcover_type, class_name in class_names.items():
+    column_name = f'landcover_{class_name}'
+    if column_name in zonal_stats_df.columns:
+        fig, ax = plt.subplots(figsize=(10, 10))
+        zonal_stats_df.plot(column=column_name, ax=ax, legend=True,
+                            legend_kwds={'label': f'{class_name} Area'},
+                            cmap='coolwarm', linewidth=0.8, edgecolor='0.8',
+                            missing_kwds={"color": "lightgrey", "edgecolor": "black", "hatch": "///", "label": "No Data"})
+        plt.title(f'Distribution of {class_name}')
+        plt.show()
