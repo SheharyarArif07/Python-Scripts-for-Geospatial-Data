@@ -1,0 +1,25 @@
+#Counting the number of districts in Khyber Pakhtunkhwa that has the least number of hospitals based on given OSM data?
+
+#All the data entered in my personal data.
+
+
+province = "Khyber Pakhtunkhwa, Pakistan"
+
+districts_gdf = gpd.read_file(r"E:\MS GIS IST\Semester 1\GIS\Pakistan Shapefile\pak_adm_wfp_20220909_shp\pak_admbnda_adm2_wfp_20220909.shp")
+
+
+tags = {'amenity': 'hospital'}
+hospitals = ox.geometries_from_place(province, tags)
+
+hospitals_gdf = gpd.GeoDataFrame(hospitals, geometry=hospitals.geometry)
+
+hospitals_gdf = hospitals_gdf.set_crs(districts_gdf.crs, allow_override=True)
+
+hospitals_in_districts = gpd.sjoin(hospitals_gdf, districts_gdf, how="inner", op="intersects")
+
+hospital_counts = hospitals_in_districts.groupby('addr:city').size() 
+
+district_with_least_hospitals = hospital_counts.idxmin()
+least_hospitals_count = hospital_counts.min()
+
+print(least_hospitals_count)
