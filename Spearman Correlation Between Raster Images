@@ -1,0 +1,101 @@
+#Code for calculating spearman correlation between two raster images by extracting coordinates. Similar codes can be built for other statistical tools. Use your respective file paths.
+
+
+import rasterio
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import spearmanr
+from numpy.polynomial import Polynomial
+
+#Description
+# I used this code for validating my final AHP map of my thesis. I extracted AHP values
+# and corrlated with real time values using Spearman Correlation. 
+ 
+ahp_tiff_path = r"AHP_result"
+ahp_raster = rasterio.open(ahp_tiff_path)
+
+groundwater_depth_path = r"F:\MS Thesis Data\Groundwater_interpolated.shp"
+groundwater_depth_raster = rasterio.open(groundwater_depth_path)
+
+point_shp_path = r"F:\MS Thesis Data\Groundwater CDA shapefile.shp"
+points = gpd.read_file(point_shp_path)
+
+points['x'] = points.geometry.x
+points['y'] = points.geometry.y
+
+groundwater_depth_values = []
+for index, row in points.iterrows():
+    x, y = row['x'], row['y']
+    x_pixel, y_pixel = ~groundwater_depth_raster.transform * (x, y)
+    try:
+        depth_value = groundwater_depth_raster.read(1)[int(y_pixel), int(x_pixel)] 
+        groundwater_depth_values.append(depth_value)
+    except IndexError as e:
+        print(f"IndexError: {e} for coordinates (x: {x}, y: {y})")
+
+
+def normalize_depth(depth): 
+    if 18 <= depth < 28:
+        return 1  
+    elif 28 <= depth < 47:
+        return 2  
+    elif 48 <= depth < 73:
+        return 3 
+    elif 73 <= depth < 99:
+        return 4 
+    elif 98 <= depth <= 128:
+        return 5 
+    else:
+        return np.nan
+
+
+normalized_categories = [normalize_depth(depth) for depth in groundwater_depth_values]
+
+
+ahp_values = []
+for index, row in points.iterrows():
+    x, y = row['x'], row['y']
+    x_pixel, y_pixel = ~ahp_raster.transform * (x, y)
+    try:
+        ahp_value = ahp_raster.read(1)[int(y_pixel), int(x_pixel)]
+        ahp_values.append(ahp_value)
+    except IndexError as e:
+        print(f"IndexError: {e} for coordinates (x: {x}, y: {y})")
+
+data = pd.DataFrame({
+    'AHP_Zonation': ahp_values,
+    'Normalized_Depth_Category': normalized_categories
+}) 
+
+valid_data = data.dropna()
+
+print(f"Total Valid Data Points: {valid_data.shape[0]}")
+
+if valid_data.shape[0] < 2:
+    raise ValueError("Not enough valid data points for correlation analysis.")
+
+plt.figure(figsize=(10, 6))
+
+plt.scatter(valid_data['AHP_Zonation'], valid_data['Normalized_Depth_Category'], alpha=0.6, label='Data Points')
+
+sns.kdeplot(x=valid_data['AHP_Zonation'], y=valid_data['Normalized_Depth_Category'], cmap='Reds', fill=True, alpha=0.3, label='KDE Curve')
+
+p = Polynomial.fit(valid_data['AHP_Zonation'], valid_data['Normalized_Depth_Category'], deg=2)
+x_new = np.linspace(valid_data['AHP_Zonation'].min(), valid_data['AHP_Zonation'].max(), 100)
+y_new = p(x_new)
+plt.plot(x_new, y_new, color='blue', label='Polynomial Fit (degree 2)', linewidth=2)
+
+plt.title('AHP Zonation vs. Normalized Groundwater Depth Category')
+plt.xlabel('AHP Zonation Values')
+plt.ylabel('Normalized Depth Category')
+plt.grid()
+plt.legend()
+plt.savefig("AHP_vs_Normalized_Depth_Category_with_Curves.png")
+plt.show()
+
+if valid_data.shape[0] > 1:
+    corr, p_value = spearmanr(valid_data['AHP_Zonation'], valid_data['Normalized_Depth_Category'])
+    print(f"Spearman Correlation: {corr:.3f}, p-value: {p_value:.3f}")
